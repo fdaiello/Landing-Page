@@ -10,6 +10,11 @@
     <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="3.0.13" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\ContactCenter\ContactCenter.Core\ContactCenter.Core.csproj" />
+    <ProjectReference Include="..\..\ContactCenter\ContactCenter.Data\ContactCenter.Data.csproj" />
+    <ProjectReference Include="..\..\ContactCenter\ContactCenter.Infrastructure\ContactCenter.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

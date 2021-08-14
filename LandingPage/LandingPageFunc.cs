@@ -25,7 +25,7 @@ namespace LandingPage
             log.LogInformation($"Landing page function processed an http request. Code: {code}");
 
             // Chama o serviço da Landing
-            string content = await _landingPageService.GetPageHtml(code);
+            string content = await _landingPageService.GetLanding(code);
 
             // Devolve o conteudo
             return new ContentResult { Content = content, ContentType = "text/html" };

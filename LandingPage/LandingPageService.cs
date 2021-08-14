@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
 using ContactCenter.Core.Models;
 using ContactCenter.Data;
 using ContactCenter.Infrastructure.Utilities;
@@ -14,17 +13,15 @@ namespace LandingPage
 	{
 		private ApplicationDbContext _context;
 		private readonly ILogger<LandingPageService> _logger;
-		private readonly IConfiguration _configuration;
 
-		public LandingPageService(ApplicationDbContext context,ILogger<LandingPageService> logger, IConfiguration configuration)
+		public LandingPageService(ApplicationDbContext context,ILogger<LandingPageService> logger)
 		{
 			// Crate a new instace of DbContext
 			_context = context;
 			_logger = logger;
-			_configuration = configuration;
 
 		}
-		public async Task<string> GetPageHtml(string code)
+		public async Task<string> GetLanding(string code)
 		{
 			string html = string.Empty;
 
@@ -32,41 +29,41 @@ namespace LandingPage
 			if (!string.IsNullOrEmpty(code))
 			{
 				// Para usar o método da classe
-				Message baseMessage = new Message();
+				Landing baseLanding = new Landing();
 
 				// Mensagem que vamos buscar
-				Message message;
+				Landing landing;
 
 				// Confere o tamanho do código
 				if ( code.Length >= 5)
                 {
 					// Quando o código da pagina tiver 5 ou mais caracteres, localiza a smart page direto pelo código
-					message = await _context.Messages
-								.Where(p => p.SmartCode == code )
+					landing = await _context.Landings
+								.Where(p => p.Code == code )
 								.FirstOrDefaultAsync();
 				}
 				else
                 {
 					// Quando o codigo da pagina tiver menos de 5 caracteres, converte no índice e localiza a smart-page pelo indice - necessário porque o banco é case insensitive e os códigos curtos são case sensitive
-					message = await _context.Messages
-								.Where(p => p.SmartIndex == baseMessage.UnCodeIndex(code))
+					landing = await _context.Landings
+								.Where(p => p.Index == baseLanding.UnCodeIndex(code))
 								.FirstOrDefaultAsync();
 				}
 
 				// Se achou
-				if ( message != null)
+				if ( landing != null)
 				{
 					// Localiza o último envio que usou esta smart-page
 					try
 					{
-						Sending sending = await _context.Sendings
-							.Where(p => p.SmartPageId == message.Id)
-							.OrderBy(p=>p.Id)
-							.LastOrDefaultAsync();
 
-						// Marca o Hit ( visita )
-						SmartHit smartHit = new SmartHit { MessageId = message.Id, Time = Utility.HoraLocal(), SendingId = sending?.Id };
-						await _context.SmartHits.AddAsync(smartHit);
+						// Marca o Hit ( visita ) na landing
+						landing.PageViews++;
+						_context.Landings.Update(landing);
+
+						// Marca a visita no histórico
+						LandingHit landingHit = new LandingHit { LandingId = landing.Id, Time = Utility.HoraLocal() };
+						await _context.LandingHits.AddAsync(landingHit);
 						await _context.SaveChangesAsync();
 
 					}
@@ -78,7 +75,7 @@ namespace LandingPage
 					}
 
 					// Pega o codigo HTML da smart-page
-					html = message.Html;
+					html = landing.Html;
 
 				}
 
