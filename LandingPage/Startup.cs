@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ContactCenter.Data;
+using ContactCenter.Infrastructure.Clients.MailService;
 
 [assembly: FunctionsStartup(typeof(LandingPage.Startup))]
 
@@ -36,6 +37,10 @@ namespace LandingPage
 			// Get Configuration
 			var configuration = builder.GetContext().Configuration;
 			builder.Services.AddSingleton(configuration);
+
+			// Email Service
+			builder.Services.AddTransient<MailService>();
+
 		}
 
 	}

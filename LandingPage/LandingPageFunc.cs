@@ -38,8 +38,13 @@ namespace LandingPage
                 // Chama o serviço da Landing - post
                 content = await _landingPageService.PostLanding(code, req);
 
-            // Devolve o conteudo
-            return new ContentResult { Content = content, ContentType = "text/html" };
+            // Confere se o conteúdo é um link de redirecionamento
+            if ( content.StartsWith("http://") || content.StartsWith("htts://"))
+                // Redireciona
+                return new RedirectResult(content, true);
+            else
+                // Devolve o conteudo
+                return new ContentResult { Content = content, ContentType = "text/html" };
         }
 
         /*

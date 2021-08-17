@@ -3,12 +3,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Http;
 using ContactCenter.Core.Models;
 using ContactCenter.Data;
 using ContactCenter.Infrastructure.Utilities;
-using System.Collections.Specialized;
 using System.Collections.Generic;
+using ContactCenter.Infrastructure.Clients.MailService;
+using System.Net.Mail;
 
 namespace LandingPage
 {
@@ -16,20 +18,24 @@ namespace LandingPage
 	{
 		private ApplicationDbContext _context;
 		private readonly ILogger<LandingPageService> _logger;
+		private readonly MailService _mailService;
+		private readonly IConfiguration _configuration;
 
-		public LandingPageService(ApplicationDbContext context,ILogger<LandingPageService> logger)
+		public LandingPageService(ApplicationDbContext context,ILogger<LandingPageService> logger, MailService mailService, IConfiguration configuration)
 		{
-			// Crate a new instace of DbContext
+			// Injected
 			_context = context;
 			_logger = logger;
+			_mailService = mailService;
+			_configuration = configuration;
 
 		}
 		public async Task<string> GetLanding(string code)
 		{
-			string html = string.Empty;
+            string content;
 
-			// Check if we have a code
-			if (!string.IsNullOrEmpty(code))
+            // Check if we have a code
+            if (!string.IsNullOrEmpty(code))
 			{
 				// Mensagem que vamos buscar
 				Landing landing = await SearchLanding(code);
@@ -58,21 +64,27 @@ namespace LandingPage
 					}
 
 					// Pega o codigo HTML da smart-page
-					html = landing.Html;
+					content = landing.Html;
 
+					if (string.IsNullOrEmpty(content))
+						content = "Pagina em construcao!";
+				}
+				else
+				{
+					content = "Erro: pagina nao encontrada!";
 				}
 
 			}
+			else
+            {
+				content = "Erro: pagina nao encontrada!";
+			}
 
-			// Valida se deu tudo certo
-			if (string.IsNullOrEmpty(html))
-				html = "Erro: pagina nao encontrada!";
-
-			return html;
+			return content;
 		}
 		public async Task<string> PostLanding(string code, HttpRequest httpRequest)
 		{
-			string html = string.Empty;
+			string content = string.Empty;
 
 			// Check if we have a code
 			if (!string.IsNullOrEmpty(code))
@@ -106,20 +118,34 @@ namespace LandingPage
 							_logger.LogError(ex.InnerException.Message);
 					}
 
-					// Pega o codigo HTML da smart-page
-					html = landing.Html;
+					// Verifica se tem URL de redirecionamento
+					if (landing.RedirUri != null)
+                    {
+						content = landing.RedirUri.ToString();
+                    }
+					else
+                    {
+						// Pega o codigo HTML da smart-page
+						content = landing.Html;
 
-					// Adiciona a mensagem 
-					html = AddMessageToHtml(html);
+						// Adiciona a mensagem 
+						content = AddMessageToHtml(content);
+					}
+
+					//// Verifica se tem email para receber notificação
+					//if (!string.IsNullOrEmpty(landing.EmailAlert))
+     //               {
+					//	SendMail("noreply@mrpost.net", landing.EmailAlert, "Novo Lead", "Novo Lead recebido");
+     //               }
 				}
 
 			}
 
 			// Valida se deu tudo certo
-			if (string.IsNullOrEmpty(html))
-				html = "Erro: pagina nao encontrada!";
+			if (string.IsNullOrEmpty(content))
+				content = "Erro: pagina nao encontrada!";
 
-			return html;
+			return content;
 		}
 
 
@@ -263,6 +289,32 @@ namespace LandingPage
 			html = html.Replace("</body>", MESSAGE + "</body>");
 
 			return html;
+		}
+
+		private void SendMail(string senderEmail, string recipientEmail, string subject, string message)
+        {
+
+			// Configurações do Host de SMTP
+			string smtpHost = _configuration.GetValue<string>("smtpHost");
+			string smtpLogin = _configuration.GetValue<string>("smtpLogin");
+			string smtpPass = _configuration.GetValue<string>("smtpPass");
+
+			// Configura os objetos com os endereços de email 
+			MailAddress sender = new MailAddress(senderEmail, senderEmail);
+			MailAddress recipient = new MailAddress(recipientEmail, recipientEmail);
+
+			// Configurações do SMTP
+			SmtpSettings smtpSettings = new SmtpSettings
+			{
+				SmtpHost = smtpHost,
+				SmtpPort = 587,
+				SmtpLogin = smtpLogin,
+				SmtpPass = smtpPass,
+				EnableSsl = true
+			};
+
+			// Envia e obtem um Id da mensagem ( ou string empty se deu erro )
+			_mailService.SendMail(sender, recipient, sender, subject, message, null, smtpSettings);
 		}
 	}
 }
