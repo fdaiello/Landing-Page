@@ -95,6 +95,9 @@ namespace LandingPage
 				// Se achou
 				if (landing != null)
 				{
+					// Corpo da mensagem de aviso que será enviada por email
+					MailMessage mailMessage = new MailMessage { Subject = "Novo Lead", Body = $"<h1>Novo Lead</h1><h2>{landing.Title}</h2>" };
+
 					try
 					{
 						// Marca o post na landing
@@ -102,7 +105,7 @@ namespace LandingPage
 						_context.Landings.Update(landing);
 
 						// Salva o Lead
-						await SaveLead(landing, httpRequest);
+						await SaveLead(landing, httpRequest, mailMessage);
 
 						// Marca a visita no histórico
 						LandingHit landingHit = new LandingHit { LandingId = landing.Id, Time = Utility.HoraLocal(), HitType = LandingHitType.post };
@@ -132,11 +135,11 @@ namespace LandingPage
 						content = AddMessageToHtml(content);
 					}
 
-					//// Verifica se tem email para receber notificação
-					//if (!string.IsNullOrEmpty(landing.EmailAlert))
-     //               {
-					//	SendMail("noreply@mrpost.net", landing.EmailAlert, "Novo Lead", "Novo Lead recebido");
-     //               }
+					// Verifica se tem email para receber notificação
+					if (!string.IsNullOrEmpty(landing.EmailAlert))
+					{
+						SendMail(landing.EmailAlert, mailMessage );
+					}
 				}
 
 			}
@@ -176,17 +179,16 @@ namespace LandingPage
 			return landing;
 		}
 
-		private async Task SaveLead(Landing landing, HttpRequest httpRequest)
+		private async Task SaveLead(Landing landing, HttpRequest httpRequest, MailMessage mailMessage)
 		{
-
 			// Cria um novo contato
 			Contact contact = new Contact { Id = landing.GroupId + "-" + System.Guid.NewGuid().ToString(), GroupId = landing.GroupId, ChannelType = ChannelType.other, FirstActivity = Utility.HoraLocal(), LastActivity = Utility.HoraLocal(), LastText = "Novo lead" };
 
 			// Busca as propriedades basicas ( nome, email, celular ) do contato que estiverem no form
-			GetContactProperties(contact, httpRequest);
+			GetContactProperties(contact, httpRequest, mailMessage);
 
 			// Busca campos customizados do contato
-			await GetContactFieldValues(contact, httpRequest);
+			await GetContactFieldValues(contact, httpRequest, mailMessage);
 
 			// Salva o lead
 			await _context.Contacts.AddAsync(contact);
@@ -216,7 +218,7 @@ namespace LandingPage
 			await GetCardFieldValues(contact, httpRequest, card, landing);
 
 		}
-		private void GetContactProperties(Contact contact, HttpRequest httpRequest)
+		private void GetContactProperties(Contact contact, HttpRequest httpRequest, MailMessage mailMessage)
 		{
 			var form = httpRequest.Form;
 
@@ -227,18 +229,21 @@ namespace LandingPage
 				{
 					contact.Name = form[key.ToString()];
 					contact.FullName = contact.Name;
+					mailMessage.Body += "Nome: " + contact.Name + "<br>";
 				}
 				else if (key.ToLower() == "email" || key.ToLower() == "e-mail")
 				{
 					contact.Email = form[key.ToString()];
+					mailMessage.Body += "Email: " + contact.Email + "<br>";
 				}
 				else if (key.ToLower() == "phone_number" || key.ToLower() == "telefone" || key.ToLower() == "celular")
 				{
 					contact.MobilePhone = form[key.ToString()];
+					mailMessage.Body += "Celular: " + contact.MobilePhone + "<br>";
 				}
 			}
 		}
-		private async Task GetContactFieldValues(Contact contact, HttpRequest httpRequest)
+		private async Task GetContactFieldValues(Contact contact, HttpRequest httpRequest, MailMessage mailMessage)
 		{
 			// Busca os campos personalizados que estão ativos para os contatos
 			List<ContactField> contactFields = await _context.ContactFields
@@ -256,6 +261,9 @@ namespace LandingPage
 					// Adiciona um Contact Field Value
 					ContactFieldValue contactFieldValue = new ContactFieldValue { ContactId = contact.Id, FieldId = contactFields.Where(p => p.Field.Label.ToLower() == key.ToLower()).FirstOrDefault().Field.Id, Value = form[key] };
 					_context.ContactFieldValues.Add(contactFieldValue);
+
+					// Adiciona o campo no corpo da mensagem que será enviada por email
+					mailMessage.Body += key + ": " + contactFieldValue.Value + "<br>";
 				}
 			}
 
@@ -291,10 +299,11 @@ namespace LandingPage
 			return html;
 		}
 
-		private void SendMail(string senderEmail, string recipientEmail, string subject, string message)
+		private void SendMail(string recipientEmail, MailMessage mailMessage)
         {
 
 			// Configurações do Host de SMTP
+			string senderEmail =  _configuration.GetValue<string>("senderEmail");
 			string smtpHost = _configuration.GetValue<string>("smtpHost");
 			string smtpLogin = _configuration.GetValue<string>("smtpLogin");
 			string smtpPass = _configuration.GetValue<string>("smtpPass");
@@ -314,7 +323,12 @@ namespace LandingPage
 			};
 
 			// Envia e obtem um Id da mensagem ( ou string empty se deu erro )
-			_mailService.SendMail(sender, recipient, sender, subject, message, null, smtpSettings);
+			_mailService.SendMail(sender, recipient, sender, mailMessage.Subject, mailMessage.Body, null, smtpSettings);
 		}
+	}
+	public class MailMessage
+	{
+		public string Subject { get; set; }
+		public string Body { get; set; }
 	}
 }
