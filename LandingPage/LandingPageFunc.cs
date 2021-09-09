@@ -39,7 +39,7 @@ namespace LandingPage
                 content = await _landingPageService.PostLanding(code, req);
 
             // Confere se o conteúdo é um link de redirecionamento
-            if ( content.StartsWith("http://") || content.StartsWith("htts://"))
+            if ( content.StartsWith("http://") || content.StartsWith("https://"))
                 // Redireciona
                 return new RedirectResult(content, true);
             else

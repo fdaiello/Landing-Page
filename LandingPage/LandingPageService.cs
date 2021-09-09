@@ -330,8 +330,17 @@ namespace LandingPage
 				EnableSsl = true
 			};
 
-			// Envia e obtem um Id da mensagem ( ou string empty se deu erro )
-			_mailService.SendMail(sender, recipient, sender, mailMessage.Subject, mailMessage.Body, null, smtpSettings);
+            try
+            {
+				// Envia e obtem um Id da mensagem ( ou string empty se deu erro )
+				_mailService.SendMail(sender, recipient, sender, mailMessage.Subject, mailMessage.Body, null, smtpSettings);
+			}
+			catch( Exception ex)
+            {
+				_logger.LogError(ex.Message);
+				if (ex.InnerException != null)
+					_logger.LogError(ex.InnerException.Message);
+            }
 		}
 	}
 	public class MailMessage
