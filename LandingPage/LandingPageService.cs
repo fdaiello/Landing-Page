@@ -181,42 +181,50 @@ namespace LandingPage
 
 		private async Task SaveLead(Landing landing, HttpRequest httpRequest, MailMessage mailMessage)
 		{
+			// Last Text
+			string lastText = "Novo Lead";
+
 			// Cria um novo contato
-			Contact contact = new Contact { Id = landing.GroupId + "-" + System.Guid.NewGuid().ToString(), GroupId = landing.GroupId, ChannelType = ChannelType.other, FirstActivity = Utility.HoraLocal(), LastActivity = Utility.HoraLocal(), LastText = "Novo lead" };
+			Contact contact = new Contact { Id = landing.GroupId + "-" + System.Guid.NewGuid().ToString(), GroupId = landing.GroupId, ChannelType = ChannelType.other, FirstActivity = Utility.HoraLocal(), LastActivity = Utility.HoraLocal(), LastText = lastText };
 
 			// Busca as propriedades basicas ( nome, email, celular ) do contato que estiverem no form
 			GetContactProperties(contact, httpRequest, mailMessage);
 
-			// Busca campos customizados do contato
-			await GetContactFieldValues(contact, httpRequest, mailMessage);
-
-			// Salva o lead
-			await _context.Contacts.AddAsync(contact);
-			await _context.SaveChangesAsync();
-
-			// Busca o primeiro estágio da lista
-			Stage stage = await _context.Stages
-							.Where(p => p.BoardId == landing.BoardId)
-							.OrderBy(p => p.Order)
-							.FirstOrDefaultAsync();
-
-			// Se não achou nenhum estágio na lista
-			if ( stage == null)
+			// Revisa se o contato já não foi incluido ( para evitar duplicar se clicar 2 vezes )
+			if ( !_context.Contacts
+				.Where(p=>p.LastText==lastText && p.Name==contact.Name && p.MobilePhone==contact.MobilePhone && p.Email==contact.Email && p.FirstActivity > Utility.HoraLocal().Subtract(new TimeSpan(0,0,5,0))).Any())
 			{
-				// Adiciona um estágio a lista
-				stage = new Stage { BoardId = landing.BoardId??0, Name = string.Empty, Label = string.Empty };
-				await _context.Stages.AddAsync(stage);
+				// Salva o lead
+				await _context.Contacts.AddAsync(contact);
 				await _context.SaveChangesAsync();
+
+				// Busca campos customizados do contato
+				await GetContactFieldValues(contact, httpRequest, mailMessage);
+
+				// Busca o primeiro estágio da lista
+				Stage stage = await _context.Stages
+								.Where(p => p.BoardId == landing.BoardId)
+								.OrderBy(p => p.Order)
+								.FirstOrDefaultAsync();
+
+				// Se não achou nenhum estágio na lista
+				if (stage == null)
+				{
+					// Adiciona um estágio a lista
+					stage = new Stage { BoardId = landing.BoardId ?? 0, Name = string.Empty, Label = string.Empty };
+					await _context.Stages.AddAsync(stage);
+					await _context.SaveChangesAsync();
+				}
+
+				// Cria um novo cartão ( insere o contato dentro de uma lista )
+				Card card = new Card { StageId = stage.Id, CreatedDate = Utility.HoraLocal(), UpdatedDate = Utility.HoraLocal(), ContactId = contact.Id };
+				await _context.Cards.AddAsync(card);
+				await _context.SaveChangesAsync();
+
+				// Busca se tem campos customizados do cartão
+				await GetCardFieldValues(contact, httpRequest, card, landing);
+
 			}
-
-			// Cria um novo cartão ( insere o contato dentro de uma lista )
-			Card card = new Card { StageId = stage.Id, CreatedDate = Utility.HoraLocal(), UpdatedDate = Utility.HoraLocal(), ContactId = contact.Id };
-			await _context.Cards.AddAsync(card);
-			await _context.SaveChangesAsync();
-
-			// Busca se tem campos customizados do cartão
-			await GetCardFieldValues(contact, httpRequest, card, landing);
-
 		}
 		private void GetContactProperties(Contact contact, HttpRequest httpRequest, MailMessage mailMessage)
 		{
